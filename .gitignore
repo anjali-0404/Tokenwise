@@ -6,3 +6,8 @@ out/
 .env.*
 !.env.example
 
+
+config.db
+config.db-shm
+config.db-wal
+data/
