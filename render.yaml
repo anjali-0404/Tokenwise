@@ -1,0 +1,53 @@
+services:
+  - type: web
+    name: tokenwise-agent
+    runtime: node
+    region: oregon
+    plan: free
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      # ── Required: set these in Render dashboard ─────────────────────────────
+      - key: TAVILY_API_KEY
+        sync: false          # set manually in Render dashboard
+
+      # ── LLM Gateway (Bifrost or direct OpenAI-compat) ───────────────────────
+      # Option A — point at an OpenAI-compatible endpoint (e.g. OpenAI directly)
+      - key: BIFROST_URL
+        value: https://api.openai.com/v1/chat/completions
+      - key: BIFROST_API_KEY
+        sync: false          # your OpenAI sk-... key — set in Render dashboard
+
+      # ── Models ──────────────────────────────────────────────────────────────
+      - key: MODEL_SMALL
+        value: openai/gpt-4o-mini
+      - key: MODEL_LARGE
+        value: openai/gpt-4o
+      - key: MODEL_BACKUP
+        value: openai/gpt-4o-mini
+      - key: MODEL_LOCAL
+        value: openai/gpt-4o-mini   # no local Ollama on Render; use small cloud model
+
+      # ── Pricing ─────────────────────────────────────────────────────────────
+      - key: PRICE_SMALL
+        value: "0.000200"
+      - key: PRICE_LARGE
+        value: "0.010000"
+      - key: PRICE_BACKUP
+        value: "0.000200"
+      - key: PRICE_LOCAL
+        value: "0.000200"
+
+      # ── App settings ────────────────────────────────────────────────────────
+      - key: WORKSPACE_DIR
+        value: /tmp/tokenwise-workspace
+      - key: BUDGET_DB_PATH
+        value: /tmp/tokenwise-budget.json
+      - key: MOCK
+        value: "0"
+      - key: MAX_STEPS
+        value: "8"
+      - key: DEFAULT_BUDGET
+        value: "0.50"
+      - key: NODE_ENV
+        value: production
