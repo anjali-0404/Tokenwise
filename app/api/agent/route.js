@@ -38,6 +38,7 @@ export async function POST(request) {
     limitOverride,
     approvedActions,
     previousMessages,
+    forceFailover,
   } = body;
 
   if (!task || typeof task !== 'string' || !task.trim()) {
@@ -64,6 +65,7 @@ export async function POST(request) {
       limitOverride: limitOverride != null ? parseFloat(limitOverride) : undefined,
       approvedActions: Array.isArray(approvedActions) ? approvedActions : [],
       previousMessages: Array.isArray(previousMessages) ? previousMessages : [],
+      forceFailover: Boolean(forceFailover),
     });
 
     return Response.json({
