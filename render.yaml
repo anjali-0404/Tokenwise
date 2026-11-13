@@ -26,7 +26,13 @@ services:
       - key: MODEL_BACKUP
         value: openai/gpt-4o-mini
       - key: MODEL_LOCAL
-        value: openai/gpt-4o-mini   # no local Ollama on Render; use small cloud model
+        value: openai/gpt-4o-mini   # fallback cloud model unless OLLAMA_HOST is provided
+
+      # ── Remote Ollama (Optional: set if connecting to an external Ollama host) ─
+      # - key: OLLAMA_HOST
+      #   value: https://your-ollama-instance.com
+      # - key: OLLAMA_API_KEY
+      #   sync: false
 
       # ── Pricing ─────────────────────────────────────────────────────────────
       - key: PRICE_SMALL

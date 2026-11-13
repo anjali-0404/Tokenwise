@@ -6,8 +6,6 @@
 import { cfg } from '../../../lib/config.js';
 import { getSpend } from '../../../lib/budget.js';
 
-const OLLAMA_BASE = 'http://localhost:11434';
-
 /** Check if all configured models are Ollama models. */
 function allOllama() {
   return Object.values(cfg.models).every((m) => m.startsWith('ollama/'));
@@ -16,23 +14,49 @@ function allOllama() {
 /** Probe Ollama directly. */
 async function checkOllama() {
   if (cfg.mock) return { ok: true, note: 'MOCK=1' };
+
+  // On cloud deployment without OLLAMA_HOST and with cloud models configured:
+  const isCloudWithoutOllama = process.env.NODE_ENV === 'production' && !process.env.OLLAMA_HOST && !allOllama();
+  if (isCloudWithoutOllama) {
+    return {
+      ok: false,
+      optional: true,
+      host: cfg.ollamaHost,
+      note: 'Ollama is not hosted in cloud container. Set OLLAMA_HOST if using an external Ollama instance, or use cloud models via BIFROST_URL.',
+    };
+  }
+
   try {
     const ctrl  = new AbortController();
     const timer = setTimeout(() => ctrl.abort(), 6000);
-    const res   = await fetch(`${OLLAMA_BASE}/api/tags`, { signal: ctrl.signal });
+    const headers = cfg.ollamaKey ? { Authorization: `Bearer ${cfg.ollamaKey}` } : {};
+    const res   = await fetch(`${cfg.ollamaHost}/api/tags`, { headers, signal: ctrl.signal });
     clearTimeout(timer);
     if (res.ok) {
       const data   = await res.json();
       const models = (data.models ?? []).map((m) => m.name);
       const target = cfg.models.local.replace('ollama/', '');
       const pulled = models.some((m) => m.startsWith(target.split(':')[0]));
-      return { ok: pulled, models, targetPulled: pulled, targetModel: target,
-               note: pulled ? `${target} ready` : `${target} not pulled yet` };
+      return {
+        ok: pulled,
+        models,
+        targetPulled: pulled,
+        targetModel: target,
+        host: cfg.ollamaHost,
+        note: pulled ? `${target} ready` : `${target} not pulled yet on ${cfg.ollamaHost}`
+      };
     }
-    return { ok: false, status: res.status };
+    return { ok: false, status: res.status, host: cfg.ollamaHost };
   } catch (e) {
-    return { ok: false, error: e.name === 'AbortError' ? 'Timed out' : e.message,
-             hint: 'Run: ollama serve  then: ollama pull qwen2.5-coder:3b' };
+    const isProd = process.env.NODE_ENV === 'production';
+    return {
+      ok: false,
+      host: cfg.ollamaHost,
+      error: e.name === 'AbortError' ? 'Timed out' : e.message,
+      hint: isProd
+        ? `Set OLLAMA_HOST to your remote/tunneled Ollama URL or configure cloud models in BIFROST_URL.`
+        : 'Run: ollama serve  then: ollama pull ' + (cfg.models.local.replace('ollama/', '') || 'qwen2.5-coder:3b')
+    };
   }
 }
 
@@ -82,8 +106,13 @@ export async function GET() {
   const [ollama, tavily, bifrost] = await Promise.all([checkOllama(), checkTavily(), checkBifrost()]);
   const budgetDb = checkBudgetDb();
 
-  // Critical: Ollama must be up (or MOCK), budget DB must work
-  const critical = (cfg.mock || ollama.ok) && budgetDb.ok;
+  // Model provider is healthy if:
+  // 1. MOCK mode is active, OR
+  // 2. Ollama is OK (when using Ollama models or remote Ollama), OR
+  // 3. Bifrost/cloud gateway is OK (when using cloud models)
+  const isPrimaryModelOllama = allOllama() || cfg.models.small.startsWith('ollama/');
+  const modelProviderOk = cfg.mock || (isPrimaryModelOllama ? ollama.ok : (bifrost.ok || ollama.ok));
+  const critical = modelProviderOk && budgetDb.ok;
 
   return Response.json({
     status: critical ? 'ok' : 'degraded',
@@ -96,6 +125,7 @@ export async function GET() {
       workspaceDir: cfg.workspaceDir,
       maxSteps: cfg.maxSteps,
       defaultBudget: cfg.defaultBudget,
+      ollamaHost: cfg.ollamaHost,
     },
   }, { status: critical ? 200 : 503 });
 }

@@ -191,7 +191,8 @@ export default function Dashboard() {
   const tavilyOk  = health?.services?.tavily?.ok   ?? false;
   const ollamaOk  = health?.services?.ollama?.ok   ?? false;
   const isMock    = health?.mock ?? false;
-  // Can run if: mock mode OR Ollama is ready (all models are local)
+  const allModelsAreOllama = health?.allModelsAreOllama ?? false;
+  // Can run if: mock mode OR Ollama is ready OR Bifrost is ready
   const canRun    = isMock || ollamaOk || bifrostOk;
 
   // ── Model name from config (for tier visualization) ───────────────────────
@@ -265,21 +266,29 @@ export default function Dashboard() {
         }}>
           <AlertCircle size={16} style={{ color: '#fbbf24', flexShrink: 0, marginTop: 2 }} />
           <div style={{ fontSize: 13, lineHeight: 1.8 }}>
-            {!ollamaOk ? (
-              <>
-                <b style={{ color: '#fbbf24' }}>Ollama is not running.</b> Start it and the model will be ready.
-                <br />
-                <code style={{ background: '#0d0b2688', padding: '2px 8px', borderRadius: 6, fontSize: 12 }}>ollama serve</code>
-                {' '}— Ollama server must be running for all tasks (all models are local).
-                <br />
-                <span style={{ color: 'var(--mut)' }}>
-                  Model: <code style={{ background: '#0d0b2688', padding: '1px 6px', borderRadius: 4 }}>qwen2.5-coder:3b</code> — already pulled ✓
-                </span>
-              </>
+            {allModelsAreOllama ? (
+              !ollamaOk ? (
+                <>
+                  <b style={{ color: '#fbbf24' }}>Ollama is not running.</b> Start it and the model will be ready.
+                  <br />
+                  <code style={{ background: '#0d0b2688', padding: '2px 8px', borderRadius: 6, fontSize: 12 }}>ollama serve</code>
+                  {' '}— Ollama server must be accessible (set OLLAMA_HOST if hosted remotely).
+                  <br />
+                  <span style={{ color: 'var(--mut)' }}>
+                    Model: <code style={{ background: '#0d0b2688', padding: '1px 6px', borderRadius: 4 }}>{health?.services?.ollama?.targetModel || 'local model'}</code>
+                  </span>
+                </>
+              ) : (
+                <>
+                  <b style={{ color: '#fbbf24' }}>Model not ready yet.</b>
+                  {' '}Run: <code style={{ background: '#0d0b2688', padding: '2px 8px', borderRadius: 6, fontSize: 12 }}>ollama pull {health?.services?.ollama?.targetModel || 'qwen2.5-coder:3b'}</code>
+                </>
+              )
             ) : (
               <>
-                <b style={{ color: '#fbbf24' }}>Model not ready yet.</b>
-                {' '}Run: <code style={{ background: '#0d0b2688', padding: '2px 8px', borderRadius: 6, fontSize: 12 }}>ollama pull qwen2.5-coder:3b</code>
+                <b style={{ color: '#fbbf24' }}>No LLM provider available.</b>
+                <br />
+                Configure <code style={{ background: '#0d0b2688', padding: '2px 8px', borderRadius: 6, fontSize: 12 }}>BIFROST_URL</code> and <code style={{ background: '#0d0b2688', padding: '2px 8px', borderRadius: 6, fontSize: 12 }}>BIFROST_API_KEY</code> for cloud models, or set <code style={{ background: '#0d0b2688', padding: '2px 8px', borderRadius: 6, fontSize: 12 }}>OLLAMA_HOST</code> for remote Ollama.
               </>
             )}
           </div>
@@ -418,14 +427,14 @@ export default function Dashboard() {
           <div style={{ marginTop: 18, paddingTop: 14, borderTop: '1px solid var(--ln)' }}>
             <span style={{ fontFamily: 'var(--font-mono)', fontSize: 10, letterSpacing: '0.1em', color: 'var(--mut-dim)', fontWeight: 700 }}>SERVICE STATUS</span>
             {[
-              { label: 'Ollama (qwen2.5-coder:3b)', ok: ollamaOk,
+              { label: `Ollama (${health?.services?.ollama?.targetModel || 'local'})`, ok: ollamaOk,
                 note: ollamaOk
-                  ? (health?.services?.ollama?.targetPulled ? 'qwen2.5-coder:3b ✓ ready' : 'running — model pulling...')
-                  : (health?.services?.ollama?.hint ?? 'not running — run: ollama serve') },
+                  ? (health?.services?.ollama?.targetPulled ? `${health.services.ollama.targetModel} ✓ ready` : 'running — model pulling...')
+                  : (health?.services?.ollama?.optional ? health?.services?.ollama?.note : (health?.services?.ollama?.hint ?? 'not running — run: ollama serve')) },
               { label: 'Tavily (web search)',   ok: tavilyOk,
                 note: tavilyOk ? 'connected' : (health?.services?.tavily?.note ?? health?.services?.tavily?.error ?? 'check TAVILY_API_KEY') },
-              { label: 'Bifrost (optional)',     ok: bifrostOk,
-                note: bifrostOk ? 'running' : 'not running — not needed (all models are local)' },
+              { label: 'Bifrost (cloud gateway)', ok: bifrostOk,
+                note: bifrostOk ? 'connected' : (health?.services?.bifrost?.note ?? 'optional') },
             ].map(({ label, ok, note }) => (
               <div key={label} style={{ display: 'flex', gap: 8, alignItems: 'flex-start', padding: '5px 0', borderTop: '1px solid rgba(255,255,255,0.04)' }}>
                 <StatusDot ok={ok} loading={healthLoading} />
